@@ -27,12 +27,16 @@ site <- sub("^[0-9]+-HEM-(S[0-9]).*", "\\1", data$archivo)
 data$Cgl <- as.character(cgl)
 data$site <- as.character(site)
 data$season <- ifelse(mes %in% c(12, 1:4), "Dry", "Wet")
-data_sub <- data[!duplicated(data[,c("Cgl","site")]),
-  c("Cgl","site","proportion", "season")]
 
+# eliminate duplicates
+data_sub <- data[!duplicated(data[,c("Cgl","site")]),
+  c("Cgl","site","proportion", "season", "comparacion")]
+
+# create variables by plot (cgl)
 prop_cgl <- data_sub %>%
   group_by(Cgl) %>%
   summarise(
+    file_comp = first(comparacion),
     season = first(season),
     mean_prop = mean(proportion),
     range_prop = max(proportion) - min(proportion)
@@ -106,3 +110,34 @@ summary(fit)
 
 # almost all observations come from Wet season
 table(prop_coords$season)
+
+
+##### Shape 
+file_coords <- prop_cgl %>%
+  left_join(data_coords) %>%
+  filter(!is.na(x), !is.na(y)) %>%
+  as.data.frame()
+
+coordinates(file_coords) <- ~ x + y
+projection(file_coords) <- projection(raster_zvh)
+
+writeOGR(file_coords, "./hemispheric_points", "hemispheric_pics", 
+  driver = "ESRI Shapefile", verbose = FALSE, overwrite_layer = TRUE)
+
+## selección de conglomerados Pedro
+sel_shp <- readOGR("fotosHemisf_p" , "selP") %>%
+  as.data.frame() 
+sel_files <- sel_shp %>%
+  mutate(file_comp = as.character(file_comp)) %>%
+  select(comparacion = file_comp) %>%
+  left_join(data)
+
+# write filenames to a text file named selected files
+write.table(sel_files, row.names = FALSE, sep = ",")
+
+# Copy images from ameyalli (access in Julián's computer)
+selected_files <- read.csv("~/Downloads/imagenes_zvh/selected_files.txt")
+setwd("Q:/FOTOGRAFIAS HEMISFERICAS/2012")
+exito <- file.copy(from = paste("Q:/FOTOGRAFIAS HEMISFERICAS/2012/", 
+  as.character(selected_files$archivo), sep = ""), 
+  to = "Q:/FOTOGRAFIAS HEMISFERICAS/2012/seleccion_zvh")
